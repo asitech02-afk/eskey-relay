@@ -1,0 +1,11 @@
+{
+  "name": "eskey-relay",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "express": "^4.19.2",
+    "stellar-sdk": "^12.1.0",
+    "dotenv": "^16.4.5",
+    "cors": "^2.8.5"
+  }
+}
