@@ -1,8 +1,10 @@
 import express from "express";
 import cors from "cors";
-import { Server, Keypair, TransactionBuilder, Networks, Operation, Asset } from "stellar-sdk";
+import pkg from "stellar-sdk";
 import dotenv from "dotenv";
 dotenv.config();
+
+const { Server, Keypair, TransactionBuilder, Networks, Operation, Asset } = pkg;
 
 const app = express();
 app.use(express.json());
@@ -37,11 +39,13 @@ app.post("/api/send-eskey", async (req, res) => {
       fee: "10000",
       networkPassphrase: NETWORK,
     })
-      .addOperation(Operation.payment({
-        destination: publicKey,
-        asset,
-        amount: AMOUNT,
-      }))
+      .addOperation(
+        Operation.payment({
+          destination: publicKey,
+          asset,
+          amount: AMOUNT,
+        })
+      )
       .setTimeout(30)
       .build();
 
@@ -57,8 +61,9 @@ app.post("/api/send-eskey", async (req, res) => {
 
 // ✅ Homepage route para makita sa browser
 app.get("/", (req, res) => {
-  res.send("ESKEY Relay is running ✅");
+  res.send("✅ ESKEY Relay is running on Render!");
 });
 
 // ✅ Start server
-app.listen(3000, () => console.log("✅ ESKEY Relay running on port 3000"));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`✅ ESKEY Relay running on port ${PORT}`));
