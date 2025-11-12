@@ -20,10 +20,12 @@ const server = new Server(HORIZON_URL);
 const distributionKeypair = Keypair.fromSecret(DISTRIBUTION_SECRET);
 const asset = new Asset(ASSET_CODE, ISSUER_PUBLIC);
 
+// ✅ Main API endpoint
 app.post("/api/send-eskey", async (req, res) => {
   try {
     const { publicKey } = req.body;
     const relayKey = req.headers["x-relay-key"];
+
     if (relayKey !== RELAY_KEY) {
       return res.status(403).json({ error: "Unauthorized" });
     }
@@ -53,4 +55,10 @@ app.post("/api/send-eskey", async (req, res) => {
   }
 });
 
+// ✅ Homepage route para makita sa browser
+app.get("/", (req, res) => {
+  res.send("ESKEY Relay is running ✅");
+});
+
+// ✅ Start server
 app.listen(3000, () => console.log("✅ ESKEY Relay running on port 3000"));
