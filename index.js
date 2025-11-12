@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
-import * as StellarSdk from "stellar-sdk";
 import dotenv from "dotenv";
+import stellar from "stellar-sdk";
 
 dotenv.config();
 
@@ -9,7 +9,7 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// ✅ Load environment variables
+// ✅ Env variables
 const RELAY_KEY = process.env.RELAY_API_KEY;
 const DISTRIBUTION_SECRET = process.env.DISTRIBUTION_SECRET;
 const ISSUER_PUBLIC = process.env.ISSUER_PUBLIC;
@@ -18,21 +18,19 @@ const AMOUNT = process.env.ASSET_AMOUNT || "1";
 
 // ✅ Stellar setup
 const HORIZON_URL = "https://horizon.stellar.org";
-const NETWORK = StellarSdk.Networks.PUBLIC;
-const server = new StellarSdk.Server(HORIZON_URL);
+const NETWORK = stellar.Networks.PUBLIC;
+const server = new stellar.Horizon.Server(HORIZON_URL); // ✅ FIXED HERE!
 
-let distributionKeypair;
-let asset;
-
+let distributionKeypair, asset;
 try {
-  distributionKeypair = StellarSdk.Keypair.fromSecret(DISTRIBUTION_SECRET);
-  asset = new StellarSdk.Asset(ASSET_CODE, ISSUER_PUBLIC);
+  distributionKeypair = stellar.Keypair.fromSecret(DISTRIBUTION_SECRET);
+  asset = new stellar.Asset(ASSET_CODE, ISSUER_PUBLIC);
 } catch (err) {
   console.error("❌ Invalid Stellar key configuration:", err.message);
   process.exit(1);
 }
 
-// ✅ Main API endpoint
+// ✅ API route
 app.post("/api/send-eskey", async (req, res) => {
   try {
     const { publicKey } = req.body;
@@ -46,17 +44,15 @@ app.post("/api/send-eskey", async (req, res) => {
       return res.status(403).json({ success: false, message: "Unauthorized relay key" });
     }
 
-    // Load sender and recipient accounts
     const recipient = await server.loadAccount(publicKey);
     const sender = await server.loadAccount(distributionKeypair.publicKey());
 
-    // Build transaction
-    const transaction = new StellarSdk.TransactionBuilder(sender, {
-      fee: StellarSdk.BASE_FEE,
+    const transaction = new stellar.TransactionBuilder(sender, {
+      fee: stellar.BASE_FEE,
       networkPassphrase: NETWORK,
     })
       .addOperation(
-        StellarSdk.Operation.payment({
+        stellar.Operation.payment({
           destination: publicKey,
           asset,
           amount: AMOUNT,
@@ -65,7 +61,6 @@ app.post("/api/send-eskey", async (req, res) => {
       .setTimeout(30)
       .build();
 
-    // Sign and submit
     transaction.sign(distributionKeypair);
     const result = await server.submitTransaction(transaction);
 
