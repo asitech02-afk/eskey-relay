@@ -9,19 +9,20 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// ✅ Env variables
+// ENV VARIABLES
 const RELAY_KEY = process.env.RELAY_API_KEY;
 const DISTRIBUTION_SECRET = process.env.DISTRIBUTION_SECRET;
 const ISSUER_PUBLIC = process.env.ISSUER_PUBLIC;
 const ASSET_CODE = process.env.ASSET_CODE || "ESKEY";
-const AMOUNT = process.env.ASSET_AMOUNT || "1";
 
-// ✅ Stellar setup
+// STELLAR SETUP
 const HORIZON_URL = "https://horizon.stellar.org";
 const NETWORK = stellar.Networks.PUBLIC;
-const server = new stellar.Horizon.Server(HORIZON_URL); // ✅ FIXED HERE!
+const server = new stellar.Horizon.Server(HORIZON_URL);
 
 let distributionKeypair, asset;
+
+// VALIDATE KEYS
 try {
   distributionKeypair = stellar.Keypair.fromSecret(DISTRIBUTION_SECRET);
   asset = new stellar.Asset(ASSET_CODE, ISSUER_PUBLIC);
@@ -30,52 +31,80 @@ try {
   process.exit(1);
 }
 
-// ✅ API route
-app.post("/api/send-eskey", async (req, res) => {
+// ===========================================
+// ✅ FINAL WORKING CLAIM ENDPOINT
+// ===========================================
+app.post("/claim", async (req, res) => {
   try {
-    const { publicKey } = req.body;
+    const { wallet, amount } = req.body;
     const relayKey = req.headers["x-relay-key"];
 
-    if (!publicKey) {
-      return res.status(400).json({ success: false, message: "Missing publicKey" });
+    // Validate input
+    if (!wallet || !amount) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing wallet or amount",
+      });
     }
 
     if (relayKey !== RELAY_KEY) {
-      return res.status(403).json({ success: false, message: "Unauthorized relay key" });
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized relay key",
+      });
     }
 
-    const recipient = await server.loadAccount(publicKey);
+    // Load accounts
+    await server.loadAccount(wallet); // Validate recipient exists
     const sender = await server.loadAccount(distributionKeypair.publicKey());
 
-    const transaction = new stellar.TransactionBuilder(sender, {
+    // Create TX
+    const tx = new stellar.TransactionBuilder(sender, {
       fee: stellar.BASE_FEE,
       networkPassphrase: NETWORK,
     })
       .addOperation(
         stellar.Operation.payment({
-          destination: publicKey,
-          asset,
-          amount: AMOUNT,
+          destination: wallet,
+          asset: asset,
+          amount: String(amount), // dynamic amount
         })
       )
       .setTimeout(30)
       .build();
 
-    transaction.sign(distributionKeypair);
-    const result = await server.submitTransaction(transaction);
+    // Sign transaction
+    tx.sign(distributionKeypair);
 
-    res.json({ success: true, hash: result.hash });
-  } catch (error) {
-    console.error("❌ Error sending ESKEY:", error.message);
-    res.status(400).json({ success: false, message: error.message });
+    // Submit to Stellar network
+    const result = await server.submitTransaction(tx);
+
+    return res.json({
+      success: true,
+      hash: result.hash,
+      sent_amount: amount,
+      wallet: wallet,
+    });
+  } catch (err) {
+    console.error("❌ Stellar error:", err.message);
+    return res.status(400).json({
+      success: false,
+      message: err.message,
+    });
   }
 });
 
-// ✅ Homepage route
+// =============================
+// HOMEPAGE
+// =============================
 app.get("/", (req, res) => {
-  res.send("✅ ESKEY Relay is running on Render!");
+  res.send("✅ ESKEY Relay is running and ready!");
 });
 
-// ✅ Start server
+// =============================
+// START SERVER
+// =============================
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`✅ ESKEY Relay running on port ${PORT}`));
+app.listen(PORT, () =>
+  console.log(`🚀 ESKEY Relay running on port ${PORT}`)
+);
