@@ -31,15 +31,68 @@ try {
   process.exit(1);
 }
 
-// ===========================================
-// ✅ FINAL WORKING CLAIM ENDPOINT
-// ===========================================
+// ========================================================
+// ✅ AUTO TRUSTLINE ENDPOINT (Receiver signs it)
+// ========================================================
+app.post("/trustline", async (req, res) => {
+  try {
+    const { wallet } = req.body;
+    const relayKey = req.headers["x-relay-key"];
+
+    if (!wallet) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing wallet address",
+      });
+    }
+
+    if (relayKey !== RELAY_KEY) {
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized relay key",
+      });
+    }
+
+    const account = await server.loadAccount(wallet);
+
+    const tx = new stellar.TransactionBuilder(account, {
+      fee: stellar.BASE_FEE,
+      networkPassphrase: NETWORK,
+    })
+      .addOperation(
+        stellar.Operation.changeTrust({
+          asset: asset,
+        })
+      )
+      .setTimeout(180)
+      .build();
+
+    // IMPORTANT:
+    // This transaction is NOT signed here.
+    // The user signs it in frontend or wallet.
+    const xdr = tx.toXDR();
+
+    return res.json({
+      success: true,
+      message: "Trustline transaction generated. User must sign.",
+      xdr: xdr,
+    });
+  } catch (err) {
+    return res.status(400).json({
+      success: false,
+      message: err.message,
+    });
+  }
+});
+
+// ========================================================
+// ✅ FINAL WORKING CLAIM ENDPOINT (Already compatible!)
+// ========================================================
 app.post("/claim", async (req, res) => {
   try {
     const { wallet, amount } = req.body;
     const relayKey = req.headers["x-relay-key"];
 
-    // Validate input
     if (!wallet || !amount) {
       return res.status(400).json({
         success: false,
@@ -55,7 +108,7 @@ app.post("/claim", async (req, res) => {
     }
 
     // Load accounts
-    await server.loadAccount(wallet); // Validate recipient exists
+    await server.loadAccount(wallet); // validates destination
     const sender = await server.loadAccount(distributionKeypair.publicKey());
 
     // Create TX
@@ -67,16 +120,14 @@ app.post("/claim", async (req, res) => {
         stellar.Operation.payment({
           destination: wallet,
           asset: asset,
-          amount: String(amount), // dynamic amount
+          amount: String(amount),
         })
       )
       .setTimeout(30)
       .build();
 
-    // Sign transaction
     tx.sign(distributionKeypair);
 
-    // Submit to Stellar network
     const result = await server.submitTransaction(tx);
 
     return res.json({
@@ -94,16 +145,16 @@ app.post("/claim", async (req, res) => {
   }
 });
 
-// =============================
+// ===============================
 // HOMEPAGE
-// =============================
+// ===============================
 app.get("/", (req, res) => {
   res.send("✅ ESKEY Relay is running and ready!");
 });
 
-// =============================
+// ===============================
 // START SERVER
-// =============================
+// ===============================
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () =>
   console.log(`🚀 ESKEY Relay running on port ${PORT}`)
